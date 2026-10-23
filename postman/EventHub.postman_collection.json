@@ -1,0 +1,307 @@
+{
+  "info": {
+    "name": "EventHub - Assignment demo",
+    "description": "Start Django on port 8000 and run requests in order. IDs are saved automatically. The 400 responses for overbooking and repeated cancellation are expected.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "event_id",
+      "value": ""
+    },
+    {
+      "key": "reservation_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Create event",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/events/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Python Workshop {{$timestamp}}\",\n  \"venue\": \"Delhi Community Hall\",\n  \"date\": \"2030-12-20\",\n  \"total_seats\": 3,\n  \"available_seats\": 3,\n  \"status\": \"upcoming\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.collectionVariables.set(\"event_id\", pm.response.json().id);",
+              "pm.test(\"Three seats available\", function () { pm.expect(pm.response.json().available_seats).to.eql(3); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - List events",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/events/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Event is listed\", function () { pm.expect(pm.response.json().some(e => e.id === Number(pm.collectionVariables.get(\"event_id\")))).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Filter events",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/events/?status=upcoming&venue=DELHI"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Filters match\", function () { const events = pm.response.json(); pm.expect(events.length).to.be.above(0); events.forEach(e => { pm.expect(e.status).to.eql(\"upcoming\"); pm.expect(e.venue.toLowerCase()).to.include(\"delhi\"); }); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Event details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/events/{{event_id}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"No bookings yet\", function () { pm.expect(pm.response.json().reservations_count).to.eql(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Reserve 2 seats",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/reservations/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event\": \"{{event_id}}\",\n  \"attendee_name\": \"Priya Sharma\",\n  \"attendee_email\": \"priya@example.com\",\n  \"seats_reserved\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.collectionVariables.set(\"reservation_id\", pm.response.json().id);",
+              "pm.test(\"Confirmed two seats\", function () { const booking = pm.response.json(); pm.expect(booking.status).to.eql(\"confirmed\"); pm.expect(booking.seats_reserved).to.eql(2); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Check remaining seats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/events/{{event_id}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"One seat and one booking remain\", function () { const event = pm.response.json(); pm.expect(event.available_seats).to.eql(1); pm.expect(event.reservations_count).to.eql(1); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Try overbooking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/reservations/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event\": \"{{event_id}}\",\n  \"attendee_name\": \"Priya Sharma\",\n  \"attendee_email\": \"priya@example.com\",\n  \"seats_reserved\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Availability error returned\", function () { pm.expect(pm.response.json().non_field_errors).to.include(\"Only 1 seat(s) available.\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Cancel reservation",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/api/reservations/{{reservation_id}}/cancel/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Cancelled\", function () { pm.expect(pm.response.json().status).to.eql(\"cancelled\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Check restored seats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/events/{{event_id}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"All seats restored, no confirmed bookings\", function () { const event = pm.response.json(); pm.expect(event.available_seats).to.eql(3); pm.expect(event.reservations_count).to.eql(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Cancel again",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/api/reservations/{{reservation_id}}/cancel/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Double cancellation rejected\", function () { pm.expect(pm.response.json().error).to.eql(\"Already cancelled.\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Filter reservations",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/reservations/?event_id={{event_id}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Exactly one cancelled booking\", function () { const bookings = pm.response.json(); pm.expect(bookings.length).to.eql(1); pm.expect(bookings[0].event).to.eql(Number(pm.collectionVariables.get(\"event_id\"))); pm.expect(bookings[0].status).to.eql(\"cancelled\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Verify no extra seats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/events/{{event_id}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Still three available seats\", function () { pm.expect(pm.response.json().available_seats).to.eql(3); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
